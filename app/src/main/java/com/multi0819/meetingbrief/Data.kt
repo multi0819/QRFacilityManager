@@ -13,9 +13,14 @@ data class MeetingWithMessages(@Embedded val meeting:Meeting,@Relation(parentCol
  @Transaction @Query("SELECT * FROM meetings WHERE id=:id") fun detail(id:Long):Flow<MeetingWithMessages?>
  @Insert suspend fun insert(v:Meeting):Long
  @Insert suspend fun add(v:MeetingMessage):Long
+ @Update suspend fun updateMessage(v:MeetingMessage)
+ @Delete suspend fun deleteMessage(v:MeetingMessage)
  @Update suspend fun update(v:Meeting)
  @Delete suspend fun delete(v:Meeting)
  @Query("SELECT DISTINCT m.* FROM meetings m LEFT JOIN messages x ON x.meetingId=m.id WHERE m.topic LIKE '%'||:q||'%' OR x.text LIKE '%'||:q||'%' OR m.summaryText LIKE '%'||:q||'%' OR m.recommendationsText LIKE '%'||:q||'%' OR strftime('%Y-%m-%d',m.startedAt/1000,'unixepoch','localtime') LIKE '%'||:q||'%' ORDER BY m.updatedAt DESC") fun search(q:String):Flow<List<Meeting>>
+ @Query("UPDATE meetings SET updatedAt=:at WHERE id=:id") suspend fun touch(id:Long,at:Long)
+ @Transaction @Query("SELECT * FROM meetings ORDER BY startedAt") suspend fun snapshot():List<MeetingWithMessages>
+ @Query("DELETE FROM meetings") suspend fun clearAll()
 }
 
 @Database(entities=[Meeting::class,MeetingMessage::class],version=1,exportSchema=false) abstract class MeetingDb:RoomDatabase(){abstract fun dao():MeetingDao}
