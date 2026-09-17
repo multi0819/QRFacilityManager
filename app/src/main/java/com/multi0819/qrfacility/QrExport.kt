@@ -49,10 +49,21 @@ object QrExport {
     val location=listOf(e.building,e.floor,e.room).filter{it.isNotBlank()}.joinToString(" › ")
     val base=QrExport.fileBase(e.name,e.code)
     val savePng=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")){uri->
-        uri?.let{ctx.contentResolver.openOutputStream(it)?.use{out->qr.compress(Bitmap.CompressFormat.PNG,100,out)}}
+        if(uri!=null){
+            val out=ctx.contentResolver.openOutputStream(uri)
+            if(out!=null){ out.use{stream->qr.compress(Bitmap.CompressFormat.PNG,100,stream)} }
+        }
     }
     val savePdf=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")){uri->
-        uri?.let{ctx.contentResolver.openOutputStream(it)?.use{out->QrExport.pdf(qr,e.name,QrLabel.text(e.code,"",location)).use{doc->doc.writeTo(out)}}}
+        if(uri!=null){
+            val out=ctx.contentResolver.openOutputStream(uri)
+            if(out!=null){
+                out.use{stream->
+                    val doc=QrExport.pdf(qr,e.name,QrLabel.text(e.code,"",location))
+                    try{doc.writeTo(stream)}finally{doc.close()}
+                }
+            }
+        }
     }
     Column(Modifier.fillMaxWidth().padding(top=14.dp),horizontalAlignment=Alignment.CenterHorizontally){
         Image(qr.asImageBitmap(),contentDescription="${e.name} 설비 QR",modifier=Modifier.size(230.dp))
