@@ -7,7 +7,7 @@ object OfflineSummaryEngine {
  private val deadline=Regex("오늘|내일|모레|이번 주|다음 주|까지|오전|오후|\\d{1,2}[./월-]\\d{1,2}")
  private val owner=Regex("[가-힣]{2,4}(님|씨|대리|과장|팀장|부장|차장|주임|담당)")
  fun summarize(lines:List<String>):MeetingSummary {
-  val clean=lines.map(String::trim).filter(String::isNotBlank).distinct()
+  val clean=lines.map(String::trim).filter(String::isNotBlank)
   val actions=clean.filter{action.containsMatchIn(it)}
   val deadlines=clean.filter{deadline.containsMatchIn(it)}
   val cautions=clean.filter{Regex("주의|금지|위험|고장|이상|누전|안전").containsMatchIn(it)}
