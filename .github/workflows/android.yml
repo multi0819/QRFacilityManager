@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ main, build-v1 ]
+    branches: [ meeting-brief-v1 ]
   workflow_dispatch:
 jobs:
   build:
