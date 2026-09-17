@@ -32,3 +32,4 @@ class FacilityApp:Application(){ lateinit var db:FacilityDb; override fun onCrea
 enum class ResultStatus { NORMAL, ABNORMAL, UNCHECKED }
 object InspectionEvaluator { fun evaluate(value:Double?, min:Double?, max:Double?):ResultStatus { if(value==null)return ResultStatus.UNCHECKED; if(min!=null&&value<min)return ResultStatus.ABNORMAL; if(max!=null&&value>max)return ResultStatus.ABNORMAL; return ResultStatus.NORMAL } }
 object QrCodec { private const val P="facilityqr://equipment/"; fun encode(id:String)=P+id; fun parse(raw:String):String? { if(!raw.startsWith(P))return null; return raw.removePrefix(P).takeIf{runCatching{UUID.fromString(it)}.isSuccess} } }
+object QrLabel { fun text(name:String, code:String, location:String)=listOf(name,code,location).filter{it.isNotBlank()}.joinToString("\n") }
