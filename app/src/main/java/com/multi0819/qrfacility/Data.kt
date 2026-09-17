@@ -19,7 +19,7 @@ import java.util.UUID
  @Insert suspend fun addCheckItem(v:CheckItem):Long
  @Delete suspend fun deleteCheckItem(v:CheckItem)
  @Query("SELECT * FROM inspections WHERE equipmentId=:id ORDER BY at DESC") fun inspections(id:String):Flow<List<Inspection>>
- @Insert suspend fun addInspection(v:Inspection)
+ @Insert suspend fun addInspection(v:Inspection):Long
  @Query("SELECT * FROM maintenance WHERE equipmentId=:id ORDER BY at DESC") fun maintenance(id:String):Flow<List<Maintenance>>
  @Insert suspend fun addMaintenance(v:Maintenance)
 }
@@ -31,5 +31,17 @@ class FacilityApp:Application(){ lateinit var db:FacilityDb; override fun onCrea
 
 enum class ResultStatus { NORMAL, ABNORMAL, UNCHECKED }
 object InspectionEvaluator { fun evaluate(value:Double?, min:Double?, max:Double?):ResultStatus { if(value==null)return ResultStatus.UNCHECKED; if(min!=null&&value<min)return ResultStatus.ABNORMAL; if(max!=null&&value>max)return ResultStatus.ABNORMAL; return ResultStatus.NORMAL } }
+object InspectionRecordFactory {
+ fun createOrNull(equipmentId:String,item:CheckItem,value:String):Inspection? {
+  val clean=value.trim()
+  if(clean.isBlank())return null
+  val status=if(item.inputType=="NUMBER"){
+   val number=clean.toDoubleOrNull()?:return null
+   InspectionEvaluator.evaluate(number,item.min,item.max).name
+  }else if(clean=="정상") "NORMAL" else "ABNORMAL"
+  return Inspection(equipmentId=equipmentId,itemId=item.id,value=clean,status=status)
+ }
+ fun create(equipmentId:String,item:CheckItem,value:String)=requireNotNull(createOrNull(equipmentId,item,value))
+}
 object QrCodec { private const val P="facilityqr://equipment/"; fun encode(id:String)=P+id; fun parse(raw:String):String? { if(!raw.startsWith(P))return null; return raw.removePrefix(P).takeIf{runCatching{UUID.fromString(it)}.isSuccess} } }
 object QrLabel { fun text(name:String, code:String, location:String)=listOf(name,code,location).filter{it.isNotBlank()}.joinToString("\n") }
