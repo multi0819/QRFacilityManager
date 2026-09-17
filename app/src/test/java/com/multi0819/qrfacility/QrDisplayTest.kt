@@ -16,4 +16,9 @@ class QrDisplayTest {
         assertTrue(label.contains("A1"))
         assertTrue(label.contains("E › 지하6 › 2블럭"))
     }
+
+    @Test fun qrExport_hasSafeFileName() {
+        assertEquals("흡수식1호기_A1_QR", QrExport.fileBase("흡수식1호기", "A1"))
+        assertEquals("설비_QR", QrExport.fileBase("설비", ""))
+    }
 }
