@@ -10,4 +10,12 @@ class TranscriptAccumulatorTest {
  }
  @Test fun duplicateRecognitionResultIsIgnored(){val a=TranscriptAccumulator();assertNotNull(a.append("설비를 확인하세요"));assertNull(a.append("설비를 확인하세요"))}
  @Test fun partialResultNeverReplacesFinalText(){val a=TranscriptAccumulator();a.append("확정된 문장");assertEquals(listOf("확정된 문장."),a.all())}
+ @Test fun completedTranscriptCombinesEveryRecognizedSegmentIntoOneText(){
+  val a=TranscriptAccumulator();a.append("첫 번째 내용");a.append("두 번째 내용")
+  assertEquals("첫 번째 내용. 두 번째 내용.",a.completedText())
+ }
+ @Test fun resetStartsANewRecordingWithoutPreviousText(){
+  val a=TranscriptAccumulator();a.append("이전 녹음");a.reset();a.append("새 녹음")
+  assertEquals("새 녹음.",a.completedText())
+ }
 }

@@ -77,7 +77,7 @@ class MeetingVm(app:Application):AndroidViewModel(app){
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MeetingScreen(vm:MeetingVm,id:Long,onBack:()->Unit){
  val context=androidx.compose.ui.platform.LocalContext.current;val detail by vm.detail(id).collectAsState(initial=null);var input by remember{mutableStateOf("")};var partial by remember{mutableStateOf("")};var listening by remember{mutableStateOf(false)};var showSummary by remember{mutableStateOf(false)};var confirmDelete by remember{mutableStateOf(false)};var editing by remember{mutableStateOf<MeetingMessage?>(null)};var editText by remember{mutableStateOf("")};var speechError by remember{mutableStateOf("")}
- val speech=remember(context,id){ContinuousSpeech(context,onPartial={partial=it},onFinal={vm.add(id,it)},onState={listening=it},onError={speechError=it})}
+ val speech=remember(context,id){ContinuousSpeech(context,onPartial={partial=it},onCompleted={vm.add(id,it)},onState={listening=it},onError={speechError=it})}
  val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted){speechError="";speech.start()}else speechError="마이크 권한을 허용해야 음성입력을 사용할 수 있습니다."}
  DisposableEffect(speech){onDispose{speech.destroy()}}
  val share=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){}
