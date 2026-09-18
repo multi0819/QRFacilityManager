@@ -9,11 +9,12 @@ object OfflineSummaryEngine {
  private val owner=Regex("[가-힣]{2,4}(님|씨|대리|과장|팀장|부장|차장|주임|담당)")
  private val workNoun=Regex("작업|추기|점검|페인트|도장|교체|수리|청소|정비|확인|검사|운반|설치|교육|보고|제출|준비|조치|관리|운영|제작|검토|측정|기록")
  private val announcement=Regex("있겠습니다|있습니다|예정입니다|진행됩니다|내용이었|완료했습니다")
+ private val caution=Regex("주의|금지|위험|고장|이상|누전|안전")
  fun summarize(lines:List<String>):MeetingSummary {
   val clean=splitWorkFragments(lines)
-  val actionLines=clean.filter{directAction.containsMatchIn(it)||(owner.containsMatchIn(it)&&workIntent.containsMatchIn(it))||(workNoun.containsMatchIn(it)&&!announcement.containsMatchIn(it))}
+  val actionLines=clean.filter{!caution.containsMatchIn(it)&&(directAction.containsMatchIn(it)||(owner.containsMatchIn(it)&&workIntent.containsMatchIn(it))||(workNoun.containsMatchIn(it)&&!announcement.containsMatchIn(it)))}
   val actions=actionLines.map(::withoutLeadingDate).distinct()
-  val cautions=clean.filterNot(actionLines::contains).filter{Regex("주의|금지|위험|고장|이상|누전|안전").containsMatchIn(it)}
+  val cautions=clean.filterNot(actionLines::contains).filter{caution.containsMatchIn(it)}
   val confirmations=clean.filterNot(actionLines::contains).filterNot(cautions::contains).filter{Regex("확인 필요|미정|추후|모름|검토|아마|예정").containsMatchIn(it)}
   val notices=clean.filterNot(actionLines::contains).filterNot(cautions::contains).filterNot(confirmations::contains)
   val deadlines=actionLines.flatMap{deadline.findAll(it).map{m->m.value.replace("다음주","다음 주")}.toList()}.distinct()
