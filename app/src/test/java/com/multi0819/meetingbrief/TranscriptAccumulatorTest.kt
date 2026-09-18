@@ -18,4 +18,8 @@ class TranscriptAccumulatorTest {
   val a=TranscriptAccumulator();a.append("이전 녹음");a.reset();a.append("새 녹음")
   assertEquals("새 녹음.",a.completedText())
  }
+ @Test fun selectionRequestIsHandledOnlyOnce(){
+  val tracker=SelectionRequestTracker()
+  assertFalse(tracker.consume(0));assertTrue(tracker.consume(1));assertFalse(tracker.consume(1));assertTrue(tracker.consume(2))
+ }
 }
