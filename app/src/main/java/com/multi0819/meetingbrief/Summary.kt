@@ -3,13 +3,13 @@ package com.multi0819.meetingbrief
 data class MeetingSummary(val notices:List<String>,val actions:List<String>,val deadlines:List<String>,val cautions:List<String>,val confirmations:List<String>,val recommendations:List<String>)
 
 object OfflineSummaryEngine {
- private val action=Regex("하세요|바랍니다|확인|점검|조치|보고|제출|완료|교체|정리|전달")
+ private val action=Regex("하세요|하십시오|바랍니다|해 주세요|해야|확인해|점검해|조치해|보고해|제출해|완료해|교체해|정리해|전달해")
  private val deadline=Regex("오늘|내일|모레|이번 주|다음 주|까지|오전|오후|\\d{1,2}[./월-]\\d{1,2}")
  private val owner=Regex("[가-힣]{2,4}(님|씨|대리|과장|팀장|부장|차장|주임|담당)")
  fun summarize(lines:List<String>):MeetingSummary {
   val clean=lines.map(String::trim).filter(String::isNotBlank)
   val actions=clean.filter{action.containsMatchIn(it)}
-  val deadlines=clean.filter{deadline.containsMatchIn(it)}
+  val deadlines=actions.filter{deadline.containsMatchIn(it)}
   val cautions=clean.filter{Regex("주의|금지|위험|고장|이상|누전|안전").containsMatchIn(it)}
   val confirmations=clean.filter{Regex("확인 필요|미정|추후|모름|검토|아마|예정").containsMatchIn(it)}
   val rec=buildList {
