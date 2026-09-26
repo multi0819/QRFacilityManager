@@ -66,7 +66,10 @@ class RecordingViewModel(app: Application) : AndroidViewModel(app) {
                 mutableUi.value = RecordingUiReducer.recording(state)
                 when (state) {
                     is RecordingState.Stopped -> prepareAndTranscribe(state.session)
-                    is RecordingState.Failed -> state.session?.let(::prepareFailedRecording)
+                    is RecordingState.Failed -> {
+                        val session = state.session
+                        if (session != null) prepareFailedRecording(session)
+                    }
                     else -> Unit
                 }
             }
