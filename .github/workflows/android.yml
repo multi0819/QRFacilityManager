@@ -19,7 +19,17 @@ jobs:
         run: gradle testDebugUnitTest --stacktrace
       - name: Build APK
         run: gradle assembleDebug --stacktrace
+      - name: Verify offline transcription package
+        run: |
+          unzip -l app/build/outputs/apk/debug/app-debug.apk > apk-contents.txt
+          grep -q 'assets/sherpa-onnx-zipformer-korean-2024-06-24/encoder-epoch-99-avg-1.int8.onnx' apk-contents.txt
+          grep -q 'assets/sherpa-onnx-zipformer-korean-2024-06-24/decoder-epoch-99-avg-1.onnx' apk-contents.txt
+          grep -q 'assets/sherpa-onnx-zipformer-korean-2024-06-24/joiner-epoch-99-avg-1.int8.onnx' apk-contents.txt
+          grep -q 'assets/sherpa-onnx-zipformer-korean-2024-06-24/tokens.txt' apk-contents.txt
+          grep -q 'lib/arm64-v8a/libsherpa-onnx-jni.so' apk-contents.txt
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name app/build/outputs/apk/debug/app-debug.apk)" = "2.6.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print app/build/outputs/apk/debug/app-debug.apk | grep -q 'com.multi0819.meetingbrief.recording.MeetingRecordingService'
       - uses: actions/upload-artifact@v4
         with:
-          name: MeetingBrief-debug-apk
+          name: MeetingBrief-v2.6-apk
           path: app/build/outputs/apk/debug/app-debug.apk

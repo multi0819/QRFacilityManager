@@ -1,7 +1,7 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 android {
  namespace="com.multi0819.meetingbrief"; compileSdk=35
- defaultConfig { applicationId="com.multi0819.workbrief"; minSdk=26; targetSdk=35; versionCode=6; versionName="2.5.0"; ndk { abiFilters += "arm64-v8a" } }
+ defaultConfig { applicationId="com.multi0819.workbrief"; minSdk=26; targetSdk=35; versionCode=7; versionName="2.6.0"; ndk { abiFilters += "arm64-v8a" } }
  compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget="17" }
  buildFeatures { compose=true }
