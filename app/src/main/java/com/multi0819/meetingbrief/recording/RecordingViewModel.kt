@@ -54,13 +54,15 @@ object RecordingUiReducer {
 
 class RecordingViewModel(app: Application) : AndroidViewModel(app) {
     private val application = app
-    private val store = RoomTranscriptStore((app as MeetingBriefApp).db.dao())
+    private val dao = (app as MeetingBriefApp).db.dao()
+    private val store = RoomTranscriptStore(dao)
     private val repository = TranscriptionRepository(store, KoreanOfflineTranscriber(app))
     private val mutableUi = MutableStateFlow(RecordingUiState())
     val ui: StateFlow<RecordingUiState> = mutableUi.asStateFlow()
     private var activeTranscriptionMeetingId = 0L
 
     init {
+        application.startService(Intent(application, MeetingRecordingService::class.java).setAction(MeetingRecordingService.ACTION_RESTORE))
         viewModelScope.launch {
             RecordingStateBus.state.collectLatest { state ->
                 mutableUi.value = RecordingUiReducer.recording(state)
@@ -73,6 +75,10 @@ class RecordingViewModel(app: Application) : AndroidViewModel(app) {
                     else -> Unit
                 }
             }
+        }
+        viewModelScope.launch {
+            val unfinished = dao.unfinishedTranscript()
+            if (unfinished != null && unfinished.audioPath.isNotBlank()) collectTranscription(unfinished.id)
         }
     }
 

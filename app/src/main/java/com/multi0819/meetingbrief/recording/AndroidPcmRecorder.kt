@@ -5,7 +5,6 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import kotlinx.coroutines.delay
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
 
@@ -22,6 +21,7 @@ class AndroidPcmRecorder(
 
     override suspend fun start(session: RecordingSession, sink: PcmSink) {
         check(audioRecord == null) { "recorder is already running" }
+        check((session.file.parentFile?.usableSpace ?: 0L) >= MIN_FREE_BYTES) { "저장 공간이 부족합니다." }
         this.session = session
         frames = session.accumulatedFrames
         paused.set(false)
@@ -46,13 +46,11 @@ class AndroidPcmRecorder(
         try {
             recorder.startRecording()
             while (!stopRequested.get()) {
-                if (paused.get()) {
-                    delay(50)
-                    continue
-                }
                 val count = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
                 check(count >= 0) { "마이크 입력 오류: $count" }
                 if (count == 0) continue
+                if (paused.get()) continue
+                check((session.file.parentFile?.usableSpace ?: 0L) >= MIN_FREE_BYTES) { "저장 공간이 부족하여 녹음을 안전하게 중단했습니다." }
                 sink.write(buffer, count)
                 frames += count
                 framesSinceCheckpoint += count
@@ -107,6 +105,7 @@ class AndroidPcmRecorder(
     companion object {
         const val SAMPLE_RATE = 16_000
         private const val CHECKPOINT_FRAMES = SAMPLE_RATE * 5
+        private const val MIN_FREE_BYTES = 64L * 1024L * 1024L
         private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         private const val FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }

@@ -43,6 +43,7 @@ class MeetingRecordingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startRecording(intent.getLongExtra(EXTRA_MEETING_ID, -1L))
+            ACTION_RESTORE -> stopSelf(startId)
             ACTION_PAUSE -> pauseRecording()
             ACTION_RESUME -> resumeRecording()
             ACTION_STOP -> stopRecording()
@@ -173,6 +174,7 @@ class MeetingRecordingService : Service() {
 
     companion object {
         const val ACTION_START = "com.multi0819.meetingbrief.recording.START"
+        const val ACTION_RESTORE = "com.multi0819.meetingbrief.recording.RESTORE"
         const val ACTION_PAUSE = "com.multi0819.meetingbrief.recording.PAUSE"
         const val ACTION_RESUME = "com.multi0819.meetingbrief.recording.RESUME"
         const val ACTION_STOP = "com.multi0819.meetingbrief.recording.STOP"

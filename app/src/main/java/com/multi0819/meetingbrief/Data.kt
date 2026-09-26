@@ -21,6 +21,7 @@ data class MeetingWithMessages(@Embedded val meeting:Meeting,@Relation(parentCol
  @Delete suspend fun delete(v:Meeting)
  @Query("SELECT DISTINCT m.* FROM meetings m LEFT JOIN messages x ON x.meetingId=m.id WHERE m.topic LIKE '%'||:q||'%' OR x.text LIKE '%'||:q||'%' OR m.rawTranscript LIKE '%'||:q||'%' OR m.correctedTranscript LIKE '%'||:q||'%' OR m.summaryText LIKE '%'||:q||'%' OR m.recommendationsText LIKE '%'||:q||'%' OR strftime('%Y-%m-%d',m.startedAt/1000,'unixepoch','localtime') LIKE '%'||:q||'%' ORDER BY m.updatedAt DESC") fun search(q:String):Flow<List<Meeting>>
  @Query("SELECT * FROM meetings WHERE id=:id") suspend fun transcript(id:Long):Meeting?
+ @Query("SELECT * FROM meetings WHERE transcriptStatus IN ('READY','TRANSCRIBING','FAILED') AND audioPath != '' ORDER BY updatedAt DESC LIMIT 1") suspend fun unfinishedTranscript():Meeting?
  @Query("UPDATE meetings SET rawTranscript=:raw, correctedTranscript=:corrected, audioPath=:audioPath, transcriptStatus=:status, transcriptCheckpointFrame=:checkpoint, updatedAt=:updatedAt WHERE id=:id") suspend fun updateTranscript(id:Long,raw:String,corrected:String,audioPath:String,status:String,checkpoint:Long,updatedAt:Long)
  @Query("UPDATE meetings SET updatedAt=:at WHERE id=:id") suspend fun touch(id:Long,at:Long)
  @Transaction @Query("SELECT * FROM meetings ORDER BY startedAt") suspend fun snapshot():List<MeetingWithMessages>
