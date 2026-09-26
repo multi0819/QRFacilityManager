@@ -5,7 +5,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.speech.RecognizerIntent
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
@@ -31,6 +31,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
+import com.multi0819.meetingbrief.recording.RecordingPhase
+import com.multi0819.meetingbrief.recording.RecordingUiState
+import com.multi0819.meetingbrief.recording.RecordingViewModel
+import com.multi0819.meetingbrief.recording.formatElapsed
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -49,7 +53,7 @@ class MeetingVm(app:Application):AndroidViewModel(app){
  fun add(id:Long,text:String)=viewModelScope.launch{if(text.isNotBlank()){dao.add(MeetingMessage(meetingId=id,text=text.trim()));dao.touch(id,System.currentTimeMillis())}}
  fun edit(v:MeetingMessage,text:String)=viewModelScope.launch{if(text.isNotBlank()){dao.updateMessage(v.copy(text=text.trim()));dao.touch(v.meetingId,System.currentTimeMillis())}}
  fun deleteMessage(v:MeetingMessage)=viewModelScope.launch{dao.deleteMessage(v);dao.touch(v.meetingId,System.currentTimeMillis())}
- fun summarize(detail:MeetingWithMessages)=viewModelScope.launch{val s=OfflineSummaryEngine.summarize(detail.messages.map{it.text});dao.update(detail.meeting.copy(summaryText=MeetingFormatter.toShareText(detail.meeting.topic,detail.messages.map{it.text},s),recommendationsText=s.recommendations.joinToString("\n"),updatedAt=System.currentTimeMillis()))}
+ fun summarize(detail:MeetingWithMessages,draft:String="")=viewModelScope.launch{val lines=buildList{detail.meeting.correctedTranscript.takeIf{it.isNotBlank()}?.let(::add);addAll(detail.messages.map{it.text});draft.takeIf{it.isNotBlank()&&it!=detail.meeting.correctedTranscript}?.let(::add)}.distinct();val s=OfflineSummaryEngine.summarize(lines);dao.update(detail.meeting.copy(summaryText=MeetingFormatter.toShareText(detail.meeting.topic,lines,s),recommendationsText=s.recommendations.joinToString("\n"),updatedAt=System.currentTimeMillis()))}
  fun finish(m:Meeting)=viewModelScope.launch{dao.update(m.copy(endedAt=System.currentTimeMillis(),updatedAt=System.currentTimeMillis()))}
  fun delete(m:Meeting,done:()->Unit)=viewModelScope.launch{dao.delete(m);done()}
  fun export(done:(String)->Unit)=viewModelScope.launch{done(BackupCodec.encode(dao.snapshot()))}
@@ -75,21 +79,33 @@ class MeetingVm(app:Application):AndroidViewModel(app){
 @Composable fun NewMeeting(done:(String)->Unit){var topic by remember{mutableStateOf("")};Scaffold(topBar={TopAppBar(title={Text("새 회의")})}){p->Column(Modifier.padding(p).padding(20.dp)){Text("회의 주제",fontWeight=FontWeight.Bold);OutlinedTextField(topic,{topic=it},modifier=Modifier.fillMaxWidth(),placeholder={Text("예: 시설 점검 전달사항")});Spacer(Modifier.height(16.dp));Button(onClick={done(topic)},modifier=Modifier.fillMaxWidth().height(56.dp),colors=ButtonDefaults.buttonColors(containerColor=KakaoYellow,contentColor=Ink)){Text("회의 시작",fontWeight=FontWeight.Bold)}}}}
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun MeetingScreen(vm:MeetingVm,id:Long,onBack:()->Unit){
- val context=androidx.compose.ui.platform.LocalContext.current;val detail by vm.detail(id).collectAsState(initial=null);var input by remember{mutableStateOf("")};var partial by remember{mutableStateOf("")};var listening by remember{mutableStateOf(false)};var showSummary by remember{mutableStateOf(false)};var confirmDelete by remember{mutableStateOf(false)};var editing by remember{mutableStateOf<MeetingMessage?>(null)};var editText by remember{mutableStateOf("")};var speechError by remember{mutableStateOf("")}
- val speech=remember(context,id){ContinuousSpeech(context,onPartial={partial=it},onFinal={vm.add(id,it)},onState={listening=it},onError={speechError=it})}
- val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted){speechError="";speech.start()}else speechError="마이크 권한을 허용해야 음성입력을 사용할 수 있습니다."}
- DisposableEffect(speech){onDispose{speech.destroy()}}
+@Composable fun MeetingScreen(vm:MeetingVm,id:Long,onBack:()->Unit,recordingVm:RecordingViewModel=viewModel()){
+ val context=androidx.compose.ui.platform.LocalContext.current;val detail by vm.detail(id).collectAsState(initial=null);val recording by recordingVm.ui.collectAsState();var input by remember{mutableStateOf("")};var selectAllRequest by remember{mutableIntStateOf(0)};var showSummary by remember{mutableStateOf(false)};var confirmDelete by remember{mutableStateOf(false)};var editing by remember{mutableStateOf<MeetingMessage?>(null)};var editText by remember{mutableStateOf("")};var speechError by remember{mutableStateOf("")}
+ val permissions=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->if(result[Manifest.permission.RECORD_AUDIO]==true){speechError="";recordingVm.start(id)}else speechError="마이크 권한을 허용해야 회의를 녹음할 수 있습니다."}
+ LaunchedEffect(recording.phase,recording.transcript){if(recording.meetingId==id&&recording.phase==RecordingPhase.COMPLETE&&recording.transcript.isNotBlank()&&input!=recording.transcript){input=recording.transcript;selectAllRequest++}}
  val share=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){}
  val d=detail
  fun close(){d?.meeting?.let{vm.finish(it)};onBack()};BackHandler{close()}
- Scaffold(topBar={TopAppBar(title={Column{Text(d?.meeting?.topic?:"회의",fontWeight=FontWeight.Bold);Text(d?.meeting?.startedAt?.let(::time)?:"",style=MaterialTheme.typography.labelSmall)}},navigationIcon={IconButton(onClick={close()}){Icon(Icons.Default.ArrowBack,"뒤로")}},actions={IconButton(onClick={d?.let{row->val txt=row.meeting.summaryText.ifBlank{MeetingFormatter.toShareText(row.meeting.topic,row.messages.map{it.text},OfflineSummaryEngine.summarize(row.messages.map{it.text}))};share.launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,txt)},"공유"))}}){Icon(Icons.Default.Share,"공유")};IconButton(onClick={confirmDelete=true}){Icon(Icons.Default.Delete,"삭제")}})}){p->
-  Column(Modifier.padding(p).fillMaxSize().background(ChatBg)){if(speechError.isNotBlank())Text(speechError,Modifier.background(Color.White).fillMaxWidth().padding(8.dp),color=Color.Red);LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){d?.messages?.let{msgs->items(msgs,key={it.id}){m->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){Surface(shape=RoundedCornerShape(14.dp,2.dp,14.dp,14.dp),color=KakaoYellow,modifier=Modifier.widthIn(max=310.dp).clickable{editing=m;editText=m.text}){Text(m.text,Modifier.padding(12.dp),color=Ink)}}}};if(partial.isNotBlank())item{Surface(shape=RoundedCornerShape(14.dp),color=Color.White.copy(alpha=.8f)){Text("인식 중: $partial",Modifier.padding(12.dp),color=Color.DarkGray)}};if(showSummary&&d?.meeting?.summaryText?.isNotBlank()==true)item{SummaryCard(d.meeting.summaryText)}}
-   Row(Modifier.background(Color.White).padding(8.dp),verticalAlignment=Alignment.CenterVertically){IconButton(onClick={if(listening)speech.stop()else if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){speechError="";speech.start()}else permission.launch(Manifest.permission.RECORD_AUDIO)}){Icon(if(listening)Icons.Default.Stop else Icons.Default.Mic,if(listening)"음성 중지" else "연속 음성 시작",tint=if(listening)Color.Red else LocalContentColor.current)};NativeWritingField(input,{input=it},Modifier.weight(1f).heightIn(min=56.dp,max=120.dp));IconButton(onClick={vm.add(id,input);input=""},enabled=input.isNotBlank()){Icon(Icons.Default.Send,"보내기")};Button(onClick={d?.let{vm.summarize(it);showSummary=true}},colors=ButtonDefaults.buttonColors(containerColor=KakaoYellow,contentColor=Ink),contentPadding=PaddingValues(horizontal=12.dp)){Text("요약")}}
+ Scaffold(topBar={TopAppBar(title={Column{Text(d?.meeting?.topic?:"회의",fontWeight=FontWeight.Bold);Text(d?.meeting?.startedAt?.let(::time)?:"",style=MaterialTheme.typography.labelSmall)}},navigationIcon={IconButton(onClick={close()}){Icon(Icons.Default.ArrowBack,"뒤로")}},actions={IconButton(onClick={d?.let{row->val lines=buildList{row.meeting.correctedTranscript.takeIf{it.isNotBlank()}?.let(::add);addAll(row.messages.map{it.text})}.distinct();val txt=row.meeting.summaryText.ifBlank{MeetingFormatter.toShareText(row.meeting.topic,lines,OfflineSummaryEngine.summarize(lines))};share.launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,txt)},"공유"))}}){Icon(Icons.Default.Share,"공유")};IconButton(onClick={confirmDelete=true}){Icon(Icons.Default.Delete,"삭제")}})}){p->
+  Column(Modifier.padding(p).fillMaxSize().background(ChatBg)){if(speechError.isNotBlank())Text(speechError,Modifier.background(Color.White).fillMaxWidth().padding(8.dp),color=Color.Red);LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){d?.meeting?.correctedTranscript?.takeIf{it.isNotBlank()}?.let{transcript->item{Surface(shape=RoundedCornerShape(14.dp),color=Color.White){Column(Modifier.padding(14.dp)){Text("전체 회의 내용",fontWeight=FontWeight.Bold);Spacer(Modifier.height(6.dp));Text(transcript)}}}};d?.messages?.let{msgs->items(msgs,key={it.id}){m->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){Surface(shape=RoundedCornerShape(14.dp,2.dp,14.dp,14.dp),color=KakaoYellow,modifier=Modifier.widthIn(max=310.dp).clickable{editing=m;editText=m.text}){Text(m.text,Modifier.padding(12.dp),color=Ink)}}}};if(showSummary&&d?.meeting?.summaryText?.isNotBlank()==true)item{SummaryCard(d.meeting.summaryText)}}
+   RecordingStatus(recording.takeIf{it.meetingId==id}?:RecordingUiState(),onPause=recordingVm::pause,onResume=recordingVm::resume,onStop=recordingVm::stopAndTranscribe,onRetry={recordingVm.retryTranscription(id)})
+   Row(Modifier.background(Color.White).padding(8.dp),verticalAlignment=Alignment.CenterVertically){IconButton(onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){speechError="";recordingVm.start(id)}else{val requested=buildList{add(Manifest.permission.RECORD_AUDIO);if(Build.VERSION.SDK_INT>=33)add(Manifest.permission.POST_NOTIFICATIONS)};permissions.launch(requested.toTypedArray())}},enabled=recording.phase !in listOf(RecordingPhase.RECORDING,RecordingPhase.PAUSED,RecordingPhase.TRANSCRIBING)){Icon(Icons.Default.Mic,"녹음 시작")};NativeWritingField(input,{input=it},Modifier.weight(1f).heightIn(min=56.dp,max=120.dp),selectAllRequest);IconButton(onClick={vm.add(id,input);input=""},enabled=input.isNotBlank()){Icon(Icons.Default.Send,"보내기")};Button(onClick={d?.let{vm.summarize(it,input);showSummary=true}},colors=ButtonDefaults.buttonColors(containerColor=KakaoYellow,contentColor=Ink),contentPadding=PaddingValues(horizontal=12.dp)){Text("요약")}}
   }
  }
  if(confirmDelete)AlertDialog(onDismissRequest={confirmDelete=false},title={Text("회의 기록 삭제")},text={Text("이 기록을 삭제할까요?")},confirmButton={TextButton(onClick={d?.meeting?.let{vm.delete(it,onBack)}}){Text("삭제",color=Color.Red)}},dismissButton={TextButton(onClick={confirmDelete=false}){Text("취소")}})
  editing?.let{m->AlertDialog(onDismissRequest={editing=null},title={Text("전달사항 수정")},text={OutlinedTextField(editText,{editText=it})},confirmButton={TextButton(onClick={vm.edit(m,editText);editing=null}){Text("저장")}},dismissButton={Row{TextButton(onClick={vm.deleteMessage(m);editing=null}){Text("삭제",color=Color.Red)};TextButton(onClick={editing=null}){Text("취소")}}})}
+}
+
+@Composable private fun RecordingStatus(state:RecordingUiState,onPause:()->Unit,onResume:()->Unit,onStop:()->Unit,onRetry:()->Unit){
+ if(state.phase==RecordingPhase.IDLE||state.phase==RecordingPhase.COMPLETE)return
+ Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal=12.dp,vertical=8.dp)){
+  when(state.phase){
+   RecordingPhase.RECORDING,RecordingPhase.PAUSED->{Text((if(state.phase==RecordingPhase.RECORDING)"녹음 중 " else "일시정지 ")+formatElapsed(state.elapsedMs),fontWeight=FontWeight.Bold);LinearProgressIndicator(progress={state.level.coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth());Row{TextButton(onClick=if(state.phase==RecordingPhase.RECORDING)onPause else onResume){Icon(if(state.phase==RecordingPhase.RECORDING)Icons.Default.Pause else Icons.Default.PlayArrow,null);Text(if(state.phase==RecordingPhase.RECORDING)"일시정지" else "계속")};TextButton(onClick=onStop){Icon(Icons.Default.Stop,null,tint=Color.Red);Text("녹음 중단",color=Color.Red)}}}
+   RecordingPhase.TRANSCRIBING->{Text("전체 음성을 글로 변환 중… ${state.progressPercent}%",fontWeight=FontWeight.Bold);LinearProgressIndicator(progress={state.progressPercent/100f},modifier=Modifier.fillMaxWidth())}
+   RecordingPhase.FAILED->{Text(state.error?:"처리 중 오류가 발생했습니다.",color=Color.Red);if(state.canRetry)TextButton(onClick=onRetry){Text("다시 변환")}}
+   else->Unit
+  }
+ }
 }
 
 @Composable private fun SummaryCard(text:String){Card(colors=CardDefaults.cardColors(containerColor=Color.White),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text("회의 요약",fontWeight=FontWeight.Bold);Spacer(Modifier.height(8.dp));Text(text)}}}
