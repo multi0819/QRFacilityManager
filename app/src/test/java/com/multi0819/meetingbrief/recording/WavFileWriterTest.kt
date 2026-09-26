@@ -32,6 +32,7 @@ class WavFileWriterTest {
         RandomAccessFile(file, "r").use { wav ->
             assertEquals("RIFF", wav.readAscii(4))
             assertEquals(44L, wav.length() - 8)
+            wav.seek(8)
             assertEquals("WAVE", wav.readAscii(4))
             wav.seek(40)
             assertEquals(8L, wav.readUInt32Le())

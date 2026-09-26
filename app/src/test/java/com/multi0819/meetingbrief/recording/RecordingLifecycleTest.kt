@@ -31,7 +31,8 @@ class RecordingLifecycleTest {
     fun stopFinalizesFile() {
         val lifecycle = RecordingLifecycle()
         lifecycle.start(session)
-        assertEquals(RecordingState.Stopped(session), lifecycle.stop(session.copy(accumulatedFrames = 320)))
+        val finalized = session.copy(accumulatedFrames = 320)
+        assertEquals(RecordingState.Stopped(finalized), lifecycle.stop(finalized))
     }
 
     @Test
